@@ -32,9 +32,13 @@ export async function fetchMatchDetail(matchId: string): Promise<MatchInfo> {
  * returns only the basic match info; advanced fields are omitted for
  * bandwidth reasons.
  */
-export async function fetchUserMatches(identifier: string, page?: number): Promise<MatchInfo[]> {
-  const url = new URL(`${BASE_URL}/users/${encodeURIComponent(identifier)}/matches?count=100`);
+export async function fetchUserMatches(identifier: string, page?: number, types?: number[]): Promise<MatchInfo[]> {
+  const url = new URL(`${BASE_URL}/users/${encodeURIComponent(identifier)}/matches`);
+  url.searchParams.set('count', '100');
   if (page != null) url.searchParams.set("page", String(page));
+  if (types && types.length > 0) {
+    for (const t of types) url.searchParams.append('type', String(t));
+  }
   const res = await fetch(url.toString(), { headers: getHeaders(), cache: "no-store" });
   if (!res.ok) {
     throw new Error(`User matches request failed with status ${res.status}`);

@@ -21,7 +21,7 @@ interface HubProps {
  */
 export default function Hub({ identifier }: HubProps) {
   const [allMatches, setAllMatches] = useState<MatchInfo[]>([]);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>({ types: new Set([2]) });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,13 +32,22 @@ export default function Hub({ identifier }: HubProps) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/mcsr/user-matches?identifier=${encodeURIComponent(identifier)}`);
+        const types = Array.from(filters.types ?? [] as unknown as Set<number>);
+        const typeQuery = types.map((t) => `type=${encodeURIComponent(String(t))}`).join('&');
+        const url = `/api/mcsr/user-matches?identifier=${encodeURIComponent(identifier)}${typeQuery ? '&' + typeQuery : ''}`;
+        const res = await fetch(url);
         if (!res.ok) {
           throw new Error(`Failed to fetch matches: ${res.statusText}`);
         }
         const data = await res.json();
         if (!cancelled) {
-          setAllMatches(data.matches ?? []);
+          const incoming = data.matches ?? [];
+          // Helpful debug log to confirm what the server returned
+          // and to verify the UI is receiving the fresh dataset.
+          // Remove in production if noisy.
+          // eslint-disable-next-line no-console
+          console.log('Fetched matches (server):', incoming.length);
+          setAllMatches(incoming);
         }
       } catch (err: any) {
         if (!cancelled) setError(err?.message ?? String(err));
@@ -50,14 +59,25 @@ export default function Hub({ identifier }: HubProps) {
     return () => {
       cancelled = true;
     };
-  }, [identifier]);
+  }, [identifier, JSON.stringify(Array.from(filters.types ?? []))]);
 
   // Compute filtered subset whenever matches or filters change
   const filteredMatches = useMemo(() => applyFilters(allMatches, filters), [allMatches, filters]);
-  const overview = useMemo(() => computeOverview(filteredMatches, undefined), [filteredMatches]);
+  // derive user UUID from fetched matches when possible (match by uuid or nickname)
+  const derivedUserUuid = useMemo(() => {
+    for (const m of allMatches) {
+      for (const p of m.players) {
+        if (!p) continue;
+        if (p.uuid && p.uuid === identifier) return p.uuid;
+        if (p.nickname && p.nickname.toLowerCase() === identifier.toLowerCase()) return p.uuid;
+      }
+    }
+    return undefined;
+  }, [allMatches, identifier]);
+  const overview = useMemo(() => computeOverview(filteredMatches, derivedUserUuid), [filteredMatches, derivedUserUuid]);
   const series = useMemo(() => timeSeries(filteredMatches), [filteredMatches]);
   const byOverworld = useMemo(() => breakdownByKey(filteredMatches, m => m.seed?.overworld ?? null), [filteredMatches]);
-  const byBastion = useMemo(() => breakdownByKey(filteredMatches, m => m.seed?.bastion ?? null), [filteredMatches]);
+  
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
@@ -74,12 +94,11 @@ export default function Hub({ identifier }: HubProps) {
         <TimeHistogram matches={filteredMatches} />
       </div>
       <div style={{ height: 24 }} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 24 }}>
         <BreakdownBar title="Overworld structures" data={byOverworld} />
-        <BreakdownBar title="Bastion types" data={byBastion} />
       </div>
       <div style={{ height: 24 }} />
-      <MatchTable matches={filteredMatches} />
+      <MatchTable matches={filteredMatches} user={identifier} />
     </div>
   );
 }

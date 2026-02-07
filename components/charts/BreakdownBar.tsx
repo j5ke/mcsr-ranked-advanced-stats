@@ -1,6 +1,7 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { humanizeStructure, humanizeBiome } from "@/lib/format";
 
 interface BreakdownBarProps {
   title: string;
@@ -14,7 +15,19 @@ interface BreakdownBarProps {
  * type on the y‑axis and the count on the x‑axis.
  */
 export default function BreakdownBar({ title, data }: BreakdownBarProps) {
-  const top = data.slice(0, 12);
+  const top = data.slice(0, 12).map((d) => {
+    const key = d.name;
+    let label = key;
+    if (!key) label = '—';
+    else if (/^[A-Z0-9_]+$/.test(key)) {
+      label = humanizeStructure(key);
+    } else if (/^[a-z0-9_]+$/.test(key)) {
+      label = humanizeBiome(key);
+    } else {
+      label = key;
+    }
+    return { ...d, displayName: label };
+  });
   return (
     <div style={{ border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
       <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>
@@ -22,8 +35,8 @@ export default function BreakdownBar({ title, data }: BreakdownBarProps) {
         <ResponsiveContainer>
           <BarChart data={top} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 40 }}>
             <XAxis type="number" allowDecimals={false} />
-            <YAxis type="category" dataKey="name" width={160} />
-            <Tooltip />
+            <YAxis type="category" dataKey="displayName" width={140} tick={{ fontSize: 12 }} />
+            <Tooltip formatter={(value: any, name: any, props: any) => [value, (props.payload?.displayName ?? props.payload?.name) || name]} />
             <Bar dataKey="count" />
           </BarChart>
         </ResponsiveContainer>

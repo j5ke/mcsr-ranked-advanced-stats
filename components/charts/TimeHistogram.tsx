@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { MatchInfo } from "@/types/mcsr";
+import { formatSecondsShort, formatSecondsCompact } from "@/lib/format";
 
 interface TimeHistogramProps {
   matches: MatchInfo[];
@@ -41,7 +42,12 @@ export default function TimeHistogram({ matches }: TimeHistogramProps) {
     // Round bucket size up to nearest 10 seconds for nicer labels
     const step = 10;
     bucketSize = Math.max(step, Math.ceil(bucketSize / step) * step);
-    return bucketize(times, bucketSize);
+    const buckets = bucketize(times, bucketSize);
+    // convert numeric second ranges into compact human-friendly labels
+    return buckets.map((b: any) => {
+      const parts = b.label.split('–').map((s: string) => Number(s));
+      return { label: `${formatSecondsCompact(parts[0])}–${formatSecondsCompact(parts[1])}`, count: b.count };
+    });
   }, [matches]);
   return (
     <div style={{ border: '1px solid #eee', borderRadius: 12, padding: 12 }}>
@@ -49,7 +55,7 @@ export default function TimeHistogram({ matches }: TimeHistogramProps) {
       <div style={{ width: '100%', height: 300 }}>
         <ResponsiveContainer>
           <BarChart data={data} margin={{ top: 10, right: 20, bottom: 40, left: 0 }}>
-            <XAxis dataKey="label" angle={-45} textAnchor="end" interval={0} />
+            <XAxis dataKey="label" angle={-45} textAnchor="end" interval={0} tick={{ fontSize: 15 }} />
             <YAxis allowDecimals={false} />
             <Tooltip />
             <Bar dataKey="count" />

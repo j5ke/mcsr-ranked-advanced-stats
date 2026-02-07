@@ -21,6 +21,7 @@ export interface MatchSeed {
   id: string | null;
   overworld: string | null;
   bastion: string | null;
+  nether?: string | null;
   endTowers: number[];
   variations: string[];
 }
@@ -35,11 +36,18 @@ export interface MatchInfo {
   players: UserProfile[];
   spectators: UserProfile[];
   seed: MatchSeed | null;
+  seedType?: string | null;
+  bastionType?: string | null;
   result: { uuid: string | null; time: number };
   forfeited: boolean;
   decayed: boolean;
   rank?: { season: number | null; allTime: number | null };
-  changes?: { uuid: string; change: number | null; eloRate: number | null }[];
+  /**
+   * Array of elo changes for the match.  The API may include one or two
+   * entries (one per player) and individual fields can be missing, so
+   * all properties are optional.
+   */
+  changes?: Array<{ uuid?: string | null; change?: number | null; eloRate?: number | null }>;
   tag: string | null;
   beginner: boolean;
   completions?: { uuid: string; time: number }[];

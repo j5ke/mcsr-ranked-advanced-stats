@@ -1,4 +1,5 @@
 import { MatchInfo } from "@/types/mcsr";
+import { parseVariations } from "./format";
 
 /**
  * Filters used to refine the list of matches on the client.  Each property
@@ -10,8 +11,11 @@ export interface Filters {
   endDateSec?: number;
   overworld?: Set<string>;
   bastion?: Set<string>;
+  fortress?: Set<string>;
+  bastionBiome?: Set<string>;
+  structure?: Set<string>;
   variations?: Set<string>;
-  endTowerHeights?: Set<number>;
+  bastionType?: Set<string>;
   hideDecayed?: boolean;
   hideForfeits?: boolean;
   beginnerOnly?: boolean;
@@ -25,11 +29,16 @@ export interface Filters {
  */
 export function applyFilters(matches: MatchInfo[], f: Filters): MatchInfo[] {
   return matches.filter((m) => {
-    if (f.types && !f.types.has(m.type)) return false;
+    // Match type is handled by the server when provided as a query
+    // parameter; avoid client-side filtering on `types` so the
+    // UI reflects exactly what the server returned.
     if (f.startDateSec && m.date < f.startDateSec) return false;
     if (f.endDateSec && m.date > f.endDateSec) return false;
     if (f.hideDecayed && m.decayed) return false;
-    if (f.hideForfeits && m.forfeited) return false;
+    // Treat "hide forfeits" as hiding only non-draw forfeits. A draw is
+    // represented by `forfeited === true` but no reported winner; keep
+    // those visible when the user asks to hide forfeits.
+    if (f.hideForfeits && m.forfeited && !!m.result?.uuid) return false;
     if (f.beginnerOnly && !m.beginner) return false;
 
     const seed = m.seed;
@@ -37,7 +46,26 @@ export function applyFilters(matches: MatchInfo[], f: Filters): MatchInfo[] {
       if (!seed?.overworld || !f.overworld.has(seed.overworld)) return false;
     }
     if (f.bastion && f.bastion.size > 0) {
-      if (!seed?.bastion || !f.bastion.has(seed.bastion)) return false;
+      const bastionVal = (m as any).bastionType ?? seed?.bastion ?? seed?.nether ?? null;
+      if (!bastionVal || !f.bastion.has(bastionVal)) return false;
+    }
+    // parse variations into derived categories
+    const parsed = parseVariations(seed?.variations ?? []);
+    if (f.fortress && f.fortress.size > 0) {
+      // match if any fortress biome in seed matches filter
+      const biomes = Array.from(parsed.fortressBiomes);
+      if (biomes.length === 0 || !biomes.some((b) => f.fortress!.has(b))) return false;
+    }
+    if (f.bastionBiome && f.bastionBiome.size > 0) {
+      const biomes = Array.from(parsed.bastionBiomes);
+      if (biomes.length === 0 || !biomes.some((b) => f.bastionBiome!.has(b))) return false;
+    }
+    if (f.structure && f.structure.size > 0) {
+      const structures = Array.from(parsed.structures);
+      if (structures.length === 0 || !structures.some((s) => f.structure!.has(s))) return false;
+    }
+    if (f.bastionType && f.bastionType.size > 0) {
+      if (!parsed.bastionType || !f.bastionType.has(parsed.bastionType)) return false;
     }
     if (f.variations && f.variations.size > 0) {
       const vars = seed?.variations ?? [];
@@ -50,17 +78,7 @@ export function applyFilters(matches: MatchInfo[], f: Filters): MatchInfo[] {
       }
       if (!ok) return false;
     }
-    if (f.endTowerHeights && f.endTowerHeights.size > 0) {
-      const towers = seed?.endTowers ?? [];
-      let ok = false;
-      for (const h of towers) {
-        if (f.endTowerHeights.has(h)) {
-          ok = true;
-          break;
-        }
-      }
-      if (!ok) return false;
-    }
+    // endSpawnBuried and endTowerHeights filters removed
     return true;
   });
 }
@@ -72,20 +90,140 @@ export function applyFilters(matches: MatchInfo[], f: Filters): MatchInfo[] {
  */
 export function computeOverview(matches: MatchInfo[], userUuid?: string) {
   const total = matches.length;
-  const forfeits = matches.filter((m) => m.forfeited).length;
+  let forfeits = 0;
   const decays = matches.filter((m) => m.decayed).length;
-  const completions = matches.filter((m) => !m.forfeited).length;
-  const times = matches.filter((m) => !m.forfeited).map((m) => m.result.time);
-  const avgTimeMs = times.length ? times.reduce((a, b) => a + b, 0) / times.length : null;
-  const wins = userUuid ? matches.filter((m) => m.result.uuid === userUuid).length : null;
+  let completions = 0; // counts completion-wins by the user
+  const times: number[] = [];
+  const avgTimeMs = () => (times.length ? times.reduce((a, b) => a + b, 0) / times.length : null);
+  let wins: number | null = userUuid ? 0 : null;
+  let draws = 0;
+  let userForfeits = 0;
+  let opponentForfeits = 0;
+
+  for (const m of matches) {
+    const outcome = getMatchOutcome(m, userUuid);
+
+    // Draws: per new rule, forfeited=true and no winner -> draw
+    if (outcome.outcome === 'draw') {
+      draws += 1;
+      continue;
+    }
+
+    // Completion wins count toward completions and average time
+    if (outcome.outcome === 'completion-win') {
+      if (wins != null) wins += 1;
+      completions += 1;
+      if (m.result.time != null) times.push(m.result.time);
+      continue;
+    }
+
+    // Completion losses: just count as loss implicitly
+    if (outcome.outcome === 'completion-loss') {
+      // nothing to increment beyond losses computed later
+      continue;
+    }
+
+    // Forfeits (non-draw) attribution
+    if ((outcome.outcome === 'forfeit-win' || outcome.outcome === 'forfeit-loss')) {
+      // count as a forfeited match (exclude draws handled above)
+      forfeits += 1;
+      if (outcome.outcome === 'forfeit-loss') {
+        // searched user forfeited
+        userForfeits += 1;
+      } else if (outcome.outcome === 'forfeit-win') {
+        // opponent forfeited
+        opponentForfeits += 1;
+      }
+      // If the forfeit resulted in a win for the user, count that as a win
+      if (outcome.outcome === 'forfeit-win' && wins != null) {
+        wins += 1;
+      }
+      continue;
+    }
+
+    // Unknown outcome: skip
+  }
+
+  const losses = (() => {
+    if (wins == null) return null;
+    return total - draws - wins;
+  })();
+
   return {
     total,
     completions,
+    wins: wins ?? null,
+    losses,
     forfeits,
+    draws,
+    userForfeits,
+    opponentForfeits,
     decays,
-    avgTimeMs,
-    winRate: wins != null && total > 0 ? wins / total : null,
+    avgTimeMs: avgTimeMs(),
+    winRate: wins != null && (total - draws) > 0 ? wins / (total - draws) : null,
   };
+}
+
+/**
+ * Determine the match outcome relative to a user identifier. The
+ * `userIdentifier` may be a UUID or a nickname; the function will attempt
+ * to resolve it against the match players. Returns an outcome of
+ * 'win' | 'loss' | 'draw' | 'unknown' and a flag indicating if the match
+ * was forfeited.
+ */
+export type MatchOutcome =
+  | 'draw'
+  | 'forfeit-win'
+  | 'forfeit-loss'
+  | 'completion-win'
+  | 'completion-loss'
+  | 'unknown';
+
+export function getMatchOutcome(m: MatchInfo, userIdentifier?: string): { outcome: MatchOutcome; forfeited: boolean } {
+  // Resolve searched player's UUID by nickname (preferred) or by UUID
+  let searchedUuid: string | undefined;
+  if (userIdentifier) {
+    const lower = userIdentifier.toLowerCase();
+    for (const p of m.players) {
+      if (!p) continue;
+      if (p.nickname && p.nickname.toLowerCase() === lower) {
+        searchedUuid = p.uuid ?? undefined;
+        break;
+      }
+    }
+    if (!searchedUuid) {
+      // maybe the identifier is a UUID
+      for (const p of m.players) {
+        if (!p) continue;
+        if (p.uuid && p.uuid === userIdentifier) {
+          searchedUuid = p.uuid;
+          break;
+        }
+      }
+    }
+  }
+
+  const winner = m.result?.uuid ?? null;
+  const forfeited = !!m.forfeited;
+
+  // Draw: forfeited = true and no winner reported
+  if (forfeited && !winner) return { outcome: 'draw', forfeited };
+
+  // Forfeits with a reported winner
+  if (forfeited && winner) {
+    if (searchedUuid && winner === searchedUuid) return { outcome: 'forfeit-win', forfeited };
+    if (searchedUuid) return { outcome: 'forfeit-loss', forfeited };
+    return { outcome: 'unknown', forfeited };
+  }
+
+  // Completions (non-forfeit)
+  if (!forfeited && winner) {
+    if (searchedUuid && winner === searchedUuid) return { outcome: 'completion-win', forfeited };
+    if (searchedUuid) return { outcome: 'completion-loss', forfeited };
+    return { outcome: 'unknown', forfeited };
+  }
+
+  return { outcome: 'unknown', forfeited };
 }
 
 /**

@@ -4,9 +4,14 @@ interface Overview {
   total: number;
   completions: number;
   forfeits: number;
+  draws?: number;
+  wins?: number | null;
+  losses?: number | null;
   decays: number;
   avgTimeMs: number | null;
   winRate: number | null;
+  userForfeits?: number;
+  opponentForfeits?: number;
 }
 
 interface StatCardsProps {
@@ -40,13 +45,22 @@ export default function StatCards({ overview }: StatCardsProps) {
         <div style={valueStyle}>{overview.completions}</div>
       </div>
       <div style={cardStyle}>
-        <div style={labelStyle}>Forfeits</div>
-        <div style={valueStyle}>{overview.forfeits}</div>
+        <div style={labelStyle}>Record (W / L / D)</div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ ...valueStyle, color: 'green' }}>{overview.wins ?? 0}</div>
+          <div style={{ ...valueStyle, color: 'red' }}>{overview.losses ?? 0}</div>
+          <div style={{ ...valueStyle, color: 'blue' }}>{overview.draws ?? 0}</div>
+        </div>
       </div>
       <div style={cardStyle}>
-        <div style={labelStyle}>Decayed</div>
-        <div style={valueStyle}>{overview.decays}</div>
+        <div style={labelStyle}>User Forfeits</div>
+        <div style={valueStyle}>{overview.userForfeits ?? 0}</div>
       </div>
+      <div style={cardStyle}>
+        <div style={labelStyle}>Opponent Forfeits</div>
+        <div style={valueStyle}>{overview.opponentForfeits ?? 0}</div>
+      </div>
+      
       <div style={cardStyle}>
         <div style={labelStyle}>Avg&nbsp;Time</div>
         <div style={valueStyle}>{overview.avgTimeMs != null ? formatTime(overview.avgTimeMs) : '—'}</div>
