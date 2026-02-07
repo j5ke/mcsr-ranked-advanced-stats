@@ -115,7 +115,7 @@ export default function MatchTable({ matches, user }: MatchTableProps) {
                         resultStyle.color = 'red';
                         resultStyle.fontWeight = 700;
                       } else if (out.outcome === 'draw') {
-                        resultStyle.color = 'blue';
+                        resultStyle.color = 'var(--muted)';
                         resultStyle.fontWeight = 700;
                       }
                       return <td style={resultStyle}>{resultStr}</td>;

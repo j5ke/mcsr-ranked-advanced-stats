@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import styles from './page.module.css';
+import logo from '../assets/logo.png';
 
 function RollingNumber({ value, className }: { value: number; className?: string }) {
   const formatted = useMemo(() => new Intl.NumberFormat('en-US').format(value), [value]);
@@ -157,6 +159,9 @@ export default function Page() {
   return (
     <main className={styles.hero}>
       <div className={styles.container}>
+        <div className={styles.heroLogo}>
+          <Image src={logo} alt="MCSR Ranked" width={170} height={140} priority />
+        </div>
         <h1 className={styles.title}>MCSR Ranked — Advanced Stats</h1>
         <p className={styles.subtitle}>Type a player name or UUID to explore in‑depth run analytics.</p>
 

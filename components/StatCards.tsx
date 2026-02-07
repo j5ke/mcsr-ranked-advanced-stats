@@ -72,11 +72,11 @@ export default function StatCards({ overview, matchesCount = 100, setMatchesCoun
         <div style={valueStyle}>{overview.completions}</div>
       </div>
       <div style={cardStyle}>
-        <div style={labelStyle}>Record (W / L / D)</div>
+        <div style={labelStyle}>Record</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{ ...valueStyle, color: 'green' }}>{overview.wins ?? 0}</div>
-          <div style={{ ...valueStyle, color: 'red' }}>{overview.losses ?? 0}</div>
-          <div style={{ ...valueStyle, color: 'blue' }}>{overview.draws ?? 0}</div>
+          <div style={{ ...valueStyle, color: 'green' }}>{overview.wins ?? 0}W</div>
+          <div style={{ ...valueStyle, color: 'red' }}>{overview.losses ?? 0}L</div>
+          <div style={{ ...valueStyle, color: 'var(--muted)' }}>{overview.draws ?? 0}D</div>
         </div>
       </div>
       <div style={cardStyle}>

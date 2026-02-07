@@ -19,6 +19,119 @@ interface FilterPanelProps {
   onChange: (filters: Filters) => void;
 }
 
+type Option<T extends string | number> = { value: T; label: string };
+
+interface MultiSelectProps<T extends string | number> {
+  label: string;
+  options: Option<T>[];
+  selected?: Set<T>;
+  onToggle: (value: T) => void;
+  onClear?: () => void;
+  placeholder?: string;
+  emptyLabel?: string;
+}
+
+function MultiSelect<T extends string | number>({
+  label,
+  options,
+  selected,
+  onToggle,
+  onClear,
+  placeholder = "Type to filter…",
+  emptyLabel = "N/A",
+}: MultiSelectProps<T>) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const normalized = query.trim().toLowerCase();
+  const filtered = normalized
+    ? options.filter((o) => o.label.toLowerCase().includes(normalized))
+    : options;
+  const selectedList = options.filter((o) => selected?.has(o.value));
+
+  return (
+    <div
+      className={styles.multiSelect}
+      onFocus={() => setOpen(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setOpen(false);
+        }
+      }}
+    >
+      {label ? (
+        <div className={styles.sectionTitleRow}>
+          <div className={styles.sectionTitle}>{label}</div>
+          {selected && selected.size > 0 && onClear && (
+            <button type="button" className={styles.clearButton} onClick={onClear}>
+              Clear
+            </button>
+          )}
+        </div>
+      ) : null}
+      <div className={styles.multiSelectBox}>
+        <div className={styles.chipsRow}>
+          {selectedList.length > 0 ? (
+            selectedList.map((o) => (
+              <button
+                key={`${String(o.value)}-chip`}
+                type="button"
+                className={styles.chip}
+                onClick={() => onToggle(o.value)}
+              >
+                {o.label}
+                <span aria-hidden className={styles.chipX}>×</span>
+              </button>
+            ))
+          ) : (
+            <span className={styles.mutedSmall}>All</span>
+          )}
+          <input
+            className={styles.multiSelectInput}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setOpen(true)}
+            placeholder={placeholder}
+            aria-label={`${label || 'Filter'} filter`}
+          />
+        </div>
+        {open && (
+          <div className={styles.multiSelectMenu}>
+            {filtered.length > 0 ? (
+              filtered.map((o) => (
+                <div
+                  key={String(o.value)}
+                  className={styles.multiSelectOption}
+                  role="button"
+                  tabIndex={0}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onToggle(o.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onToggle(o.value);
+                    }
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!selected?.has(o.value)}
+                    readOnly
+                  />
+                  <span>{o.label}</span>
+                </div>
+              ))
+            ) : (
+              <span className={styles.mutedSmall}>{emptyLabel}</span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Panel containing filter controls for seed parameters and match properties.  The
  * panel computes unique values from the provided matches and renders them
@@ -31,36 +144,31 @@ export default function FilterPanel({ matches, value, onChange }: FilterPanelPro
   const [showVariationsInfo, setShowVariationsInfo] = useState(false);
   const count = 100;
   // Unique lists for each seed dimension
-  // Match types (explicit list). Single-select: choose one type or All.
+  // Match types (explicit list). Multi-select with All when empty.
   const TYPE_OPTIONS: number[] = [1, 2, 3, 4];
   const typeLabels = (n: number) => typeLabel(n);
 
-  function selectType(t?: number) {
-    if (t == null) {
-      onChange({ ...value, types: undefined });
-      return;
-    }
-    const current = value.types ? Array.from(value.types)[0] : undefined;
-    if (current === t) {
-      onChange({ ...value, types: undefined });
-    } else {
-      // When switching match type, clear seed-derived filters so the
-      // freshly-fetched matches for the selected type are shown
-      // unfiltered. Keep global toggles (hideForfeits, hideDecayed,
-      // beginnerOnly) intact.
-        const next = {
-          ...value,
-          types: new Set([t]),
-          overworld: undefined,
-          bastion: undefined,
-          variations: undefined,
-          fortress: undefined,
-          bastionBiome: undefined,
-          structure: undefined,
-          bastionType: undefined,
-        };
-      onChange(next);
-    }
+  function setTypes(nextTypes?: Set<number>) {
+    const next = {
+      ...value,
+      types: nextTypes && nextTypes.size > 0 ? nextTypes : undefined,
+      overworld: undefined,
+      bastion: undefined,
+      variations: undefined,
+      fortress: undefined,
+      bastionBiome: undefined,
+      structure: undefined,
+      bastionType: undefined,
+    };
+    onChange(next);
+  }
+
+  function toggleType(t: number) {
+    const current = (value.types as Set<number> | undefined) ?? new Set<number>();
+    const next = new Set(current);
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
+    setTypes(next);
   }
 
   const overworlds = useMemo(() => uniqStrings(matches.map((m) => m.seed?.overworld)), [matches]);
@@ -161,60 +269,38 @@ export default function FilterPanel({ matches, value, onChange }: FilterPanelPro
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className={styles.header}>Filters</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div className={styles.mutedSmall}>Matches (view controls in Stats)</div>
+          <div className={styles.mutedSmall}>How does filtering work?</div>
         </div>
       </div>
       {/* Slider moved to StatCards; keep space for future small controls */}
       <div className={styles.grid}>
         {/* Match Type (single-select) */}
-        <div>
-          <div className={styles.sectionTitle}>Match Type</div>
-          <div className={styles.btnGroup}>
-            <button
-              key="all"
-              onClick={() => selectType(undefined)}
-              className={`${styles.btn} ${!value.types ? styles.selected : ''}`}
-            >
-              All
-            </button>
-            {TYPE_OPTIONS.map((t) => {
-              const selected = value.types ? Array.from(value.types)[0] === t : false;
-              return (
-                <button
-                  key={t}
-                  onClick={() => selectType(t)}
-                  className={`${styles.btn} ${selected ? styles.selected : ''}`}
-                >
-                  {typeLabels(t)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <MultiSelect
+          label="Match Type"
+          options={TYPE_OPTIONS.map((t) => ({ value: t, label: typeLabels(t) }))}
+          selected={value.types as Set<number> | undefined}
+          onToggle={toggleType}
+          onClear={() => setTypes(undefined)}
+          placeholder="Filter match types…"
+        />
         {/* Overworld */}
-        <div>
-          <div className={styles.sectionTitle}>Overworld</div>
-          <div className={styles.btnGroup}>
-            {overworlds.map((o) => (
-              <button key={o} onClick={() => toggleSet('overworld', o)} className={`${styles.btn} ${value.overworld?.has(o) ? styles.selected : ''}`}>
-                {humanizeStructure(o)}
-              </button>
-            ))}
-            {overworlds.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
-          </div>
-        </div>
+        <MultiSelect
+          label="Overworld"
+          options={overworlds.map((o) => ({ value: o, label: humanizeStructure(o) }))}
+          selected={value.overworld as Set<string> | undefined}
+          onToggle={(o) => toggleSet('overworld', o)}
+          onClear={() => onChange({ ...value, overworld: undefined })}
+          placeholder="Filter overworlds…"
+        />
         {/* Bastion */}
-        <div>
-          <div className={styles.sectionTitle}>Bastion</div>
-          <div className={styles.btnGroup}>
-            {bastions.map((b) => (
-              <button key={b} onClick={() => toggleSet('bastion', b)} className={`${styles.btn} ${value.bastion?.has(b) ? styles.selected : ''}`}>
-                {humanizeStructure(b)}
-              </button>
-            ))}
-            {bastions.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
-          </div>
-        </div>
+        <MultiSelect
+          label="Bastion"
+          options={bastions.map((b) => ({ value: b, label: humanizeStructure(b) }))}
+          selected={value.bastion as Set<string> | undefined}
+          onToggle={(b) => toggleSet('bastion', b)}
+          onClear={() => onChange({ ...value, bastion: undefined })}
+          placeholder="Filter bastions…"
+        />
         {/* Variations */}
         <div>
           <div className={styles.sectionTitleWrap}>
@@ -236,47 +322,44 @@ export default function FilterPanel({ matches, value, onChange }: FilterPanelPro
               </div>
             )}
           </div>
-          <div className={`${styles.btnGroup} ${styles.variationsScroll}`}>
-            {variations.map((v) => (
-              <button key={v} onClick={() => toggleVariation(v)} className={`${styles.btn} ${value.variations?.has(v) ? styles.selected : ''}`}>
-                {humanizeVariation(v)}
-              </button>
-            ))}
-            {variations.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
-          </div>
+          <MultiSelect
+            label=""
+            options={variations.map((v) => ({ value: v, label: humanizeVariation(v) }))}
+            selected={value.variations as Set<string> | undefined}
+            onToggle={toggleVariation}
+            onClear={() => onChange({ ...value, variations: undefined })}
+            placeholder="Filter variations…"
+          />
         </div>
         {/* End tower heights removed */}
       </div>
       {/* Derived variation categories */}
       <div className={styles.rowGap} />
       <div className={styles.grid}>
-        <div>
-          <div className={styles.sectionTitle}>Fortress biomes</div>
-          <div className={styles.btnGroup}>
-            {fortressBiomes.map((b) => (
-              <button key={b} onClick={() => toggleSet('fortress', b)} className={`${styles.btn} ${value.fortress?.has(b) ? styles.selected : ''}`}>{humanizeBiome(b)}</button>
-            ))}
-            {fortressBiomes.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
-          </div>
-        </div>
-        <div>
-          <div className={styles.sectionTitle}>Bastion biomes</div>
-          <div className={styles.btnGroup}>
-            {bastionBiomes.map((b) => (
-              <button key={b} onClick={() => toggleSet('bastionBiome', b)} className={`${styles.btn} ${value.bastionBiome?.has(b) ? styles.selected : ''}`}>{humanizeBiome(b)}</button>
-            ))}
-            {bastionBiomes.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
-          </div>
-        </div>
-        <div>
-          <div className={styles.sectionTitle}>Overworld biomes</div>
-          <div className={styles.btnGroup}>
-            {structures.map((s) => (
-              <button key={s} onClick={() => toggleSet('structure', s)} className={`${styles.btn} ${value.structure?.has(s) ? styles.selected : ''}`}>{humanizeStructure(s)}</button>
-            ))}
-            {structures.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
-          </div>
-        </div>
+        <MultiSelect
+          label="Fortress biomes"
+          options={fortressBiomes.map((b) => ({ value: b, label: humanizeBiome(b) }))}
+          selected={value.fortress as Set<string> | undefined}
+          onToggle={(b) => toggleSet('fortress', b)}
+          onClear={() => onChange({ ...value, fortress: undefined })}
+          placeholder="Filter fortress biomes…"
+        />
+        <MultiSelect
+          label="Bastion biomes"
+          options={bastionBiomes.map((b) => ({ value: b, label: humanizeBiome(b) }))}
+          selected={value.bastionBiome as Set<string> | undefined}
+          onToggle={(b) => toggleSet('bastionBiome', b)}
+          onClear={() => onChange({ ...value, bastionBiome: undefined })}
+          placeholder="Filter bastion biomes…"
+        />
+        <MultiSelect
+          label="Overworld biomes"
+          options={structures.map((s) => ({ value: s, label: humanizeStructure(s) }))}
+          selected={value.structure as Set<string> | undefined}
+          onToggle={(s) => toggleSet('structure', s)}
+          onClear={() => onChange({ ...value, structure: undefined })}
+          placeholder="Filter overworld biomes…"
+        />
         
         {/* End spawn buried filter removed */}
       </div>

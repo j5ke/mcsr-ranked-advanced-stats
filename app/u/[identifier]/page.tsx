@@ -1,7 +1,24 @@
 import Hub from "./ui";
 
 interface PageProps {
-  params: { identifier: string };
+  params: Promise<{ identifier: string }>;
+}
+
+function safeDecode(value: unknown) {
+  if (typeof value !== "string") return "";
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+export async function generateMetadata({ params }: PageProps) {
+  const resolved = await params;
+  const decoded = safeDecode(resolved?.identifier);
+  return {
+    title: `${decoded}'s MCSR Advanced Stats`,
+  };
 }
 
 /**
@@ -10,9 +27,8 @@ interface PageProps {
  * client component `Hub` defined in `ui.tsx`.  Any server–side logic or
  * data fetching could be added here if necessary.
  */
-export default function Page({ params }: PageProps) {
-  const { identifier } = params;
-  // decode in case identifier contains encoded characters (e.g. spaces)
-  const decoded = decodeURIComponent(identifier);
+export default async function Page({ params }: PageProps) {
+  const resolved = await params;
+  const decoded = safeDecode(resolved?.identifier);
   return <Hub identifier={decoded} />;
 }
