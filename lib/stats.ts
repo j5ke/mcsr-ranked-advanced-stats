@@ -68,15 +68,14 @@ export function applyFilters(matches: MatchInfo[], f: Filters): MatchInfo[] {
       if (!parsed.bastionType || !f.bastionType.has(parsed.bastionType)) return false;
     }
     if (f.variations && f.variations.size > 0) {
-      const vars = seed?.variations ?? [];
-      let ok = false;
-      for (const v of vars) {
-        if (f.variations.has(v)) {
-          ok = true;
-          break;
-        }
+      // Require that the match contains ALL selected variations (AND semantics)
+      // so selecting multiple variations narrows to matches that include every
+      // selected variation. This ensures the variations list and filters
+      // represent co-occurrence rather than a loose OR match.
+      const vars = new Set(seed?.variations ?? []);
+      for (const sel of Array.from(f.variations)) {
+        if (!vars.has(sel)) return false;
       }
-      if (!ok) return false;
     }
     // endSpawnBuried and endTowerHeights filters removed
     return true;

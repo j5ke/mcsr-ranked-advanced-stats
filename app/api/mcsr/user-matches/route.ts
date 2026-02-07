@@ -4,6 +4,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const identifier = searchParams.get("identifier");
   const pageParam = searchParams.get("page");
+  const countParam = searchParams.get("count");
   // collect any `type` query params (may be repeated)
   const typeParams = searchParams.getAll("type").map((v) => {
     const n = parseInt(v, 10);
@@ -17,8 +18,13 @@ export async function GET(request: Request) {
     const parsed = parseInt(pageParam, 10);
     if (!isNaN(parsed)) page = parsed;
   }
+  let count: number | undefined;
+  if (countParam) {
+    const parsed = parseInt(countParam, 10);
+    if (!isNaN(parsed)) count = parsed;
+  }
   try {
-    const matches = await fetchUserMatches(identifier, page, typeParams.length > 0 ? typeParams : undefined);
+    const matches = await fetchUserMatches(identifier, page, typeParams.length > 0 ? typeParams : undefined, count);
     return new Response(JSON.stringify({ matches }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message ?? "internal error" }), { status: 500, headers: { "Content-Type": "application/json" } });

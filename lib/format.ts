@@ -94,15 +94,22 @@ export function formatSecondsShort(seconds: number) {
  */
 export function formatSecondsCompact(seconds: number) {
   const s = Math.max(0, Math.round(seconds));
-  if (s >= 3600) {
-    const h = Math.floor(s / 3600);
-    const m = Math.round((s % 3600) / 60);
-    return m === 0 ? `${h}h` : `${h}h${m}m`;
+  const hours = Math.floor(s / 3600);
+  const remAfterHours = s % 3600;
+  const minutes = Math.floor(remAfterHours / 60);
+  const secs = remAfterHours % 60;
+
+  if (hours > 0) {
+    if (minutes > 0 && secs > 0) return `${hours}h${minutes}m${secs}s`;
+    if (minutes > 0) return `${hours}h${minutes}m`;
+    return `${hours}h`;
   }
-  if (s >= 60) {
-    const m = Math.round(s / 60);
-    return `${m}m`;
+
+  if (minutes > 0) {
+    // Always include seconds when present for clarity (e.g. "7m30s")
+    return secs > 0 ? `${minutes}m${secs}s` : `${minutes}m`;
   }
+
   return `${s}s`;
 }
 
@@ -159,14 +166,14 @@ export function humanizeVariation(v: string) {
   const VARIATION_HUMAN_MAP: Record<string, string> = {
     'bastion:good_gap:1': 'Right Good Gap',
     'bastion:good_gap:2': 'Left Good Gap',
-    'bastion:single:1': 'Bastion Single 1',
-    'bastion:single:2': 'Bastion Single 2',
-    'bastion:single:3': 'Bastion Single 3',
-    'bastion:triple:1': 'Bastion Triple 1',
-    'bastion:triple:2': 'Bastion Triple 2',
-    'bastion:triple:3': 'Bastion Triple 3',
-    'bastion:small_single:1': 'Bastion Small Single 1',
-    'bastion:small_single:2': 'Bastion Small Single 2',
+    'bastion:single:1': '1 Single Chest',
+    'bastion:single:2': '2 Single Chests',
+    'bastion:single:3': '3 Single Chests',
+    'bastion:triple:1': '1 Triple Chest',
+    'bastion:triple:2': '2 Triple Chests',
+    'bastion:triple:3': '3 Triple Chests',
+    'bastion:small_single:1': '1 Small Single Chest',
+    'bastion:small_single:2': '2 Small Single Chests',
     'chest:structure:carrot': 'Chest (Carrot)',
     'chest:structure:diamond': 'Diamond',
     'chest:structure:egap': 'Enchanted Golden Apple',

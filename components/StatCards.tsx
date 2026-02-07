@@ -16,6 +16,8 @@ interface Overview {
 
 interface StatCardsProps {
   overview: Overview;
+  matchesCount?: number;
+  setMatchesCount?: (n: number) => void;
 }
 
 /**
@@ -23,7 +25,7 @@ interface StatCardsProps {
  * displays a headline number or formatted value.  The component handles
  * cases where values may be null (e.g. average time or win rate).
  */
-export default function StatCards({ overview }: StatCardsProps) {
+export default function StatCards({ overview, matchesCount = 100, setMatchesCount }: StatCardsProps) {
   // Helper to format milliseconds to M:SS.xxx
   function formatTime(ms: number) {
     const totalSeconds = ms / 1000;
@@ -38,7 +40,32 @@ export default function StatCards({ overview }: StatCardsProps) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
       <div style={cardStyle}>
         <div style={labelStyle}>Matches</div>
-        <div style={valueStyle}>{overview.total}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={valueStyle}>{overview.total}</div>
+        </div>
+        {setMatchesCount && (
+          <div style={{ marginTop: 8 }}>
+            <input
+              type="range"
+              min={5}
+              max={100}
+              step={1}
+              value={matchesCount}
+              onChange={(e) => setMatchesCount?.(Number(e.target.value))}
+              style={{
+                width: 120,
+                height: 6,
+                WebkitAppearance: 'none',
+                appearance: 'none',
+                background: '#e9ecef',
+                borderRadius: 9999,
+                outline: 'none',
+                padding: 0,
+                margin: 0,
+              }}
+            />
+          </div>
+        )}
       </div>
       <div style={cardStyle}>
         <div style={labelStyle}>Completions</div>
@@ -74,19 +101,19 @@ export default function StatCards({ overview }: StatCardsProps) {
 }
 
 const cardStyle: React.CSSProperties = {
-  border: '1px solid #eee',
+  border: '1px solid var(--border)',
   borderRadius: 12,
   padding: 12,
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'flex-start',
   justifyContent: 'center',
-  backgroundColor: '#fafafa',
+  backgroundColor: 'var(--card-bg)',
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
-  color: '#666',
+  color: 'var(--muted)',
   marginBottom: 4,
 };
 

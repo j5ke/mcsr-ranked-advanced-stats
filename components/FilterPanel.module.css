@@ -1,0 +1,196 @@
+.container{
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--box-shadow);
+  transition: background-color 520ms ease, border-color 520ms ease, box-shadow 520ms ease;
+}
+
+.header{
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.grid{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.sectionTitle{
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.sectionTitleWrap{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.infoButton{
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0px;
+  margin-bottom: 4px;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.infoButton:hover, .infoButton:focus{
+  background: var(--card-bg);
+  color: var(--text);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.infoTooltip{
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: var(--box-shadow);
+  font-size: 12px;
+  z-index: 40;
+  min-width: 220px;
+  max-width: 360px;
+  width: min(72vw, 360px);
+  text-align: center;
+}
+
+.infoTooltip::before{
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid var(--card-bg);
+}
+
+.btnGroup{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn{
+  padding: 6px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: transform 520ms ease, box-shadow 520ms ease, border-color 520ms ease, background-color 520ms ease, color 520ms ease;
+}
+
+.btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(2,6,23,0.04);
+}
+
+.selected{
+  border: 2px solid var(--accent) !important;
+  background: var(--accent-opaque) !important;
+}
+
+.variationsScroll{
+  max-height: 140px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.rowGap{
+  height: 12px;
+}
+
+.checkboxRow{
+  margin-top: 12px;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.labelCheckbox{
+  font-size: 13px;
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The native checkbox appearance is bright in dark mode on some platforms.
+   Replace with a themed, accessible custom checkbox that uses CSS variables. */
+.labelCheckbox input[type="checkbox"]{
+  width: 16px;
+  height: 16px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  border-radius: 4px;
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+  transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.labelCheckbox input[type="checkbox"]:checked{
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-opaque);
+}
+
+.labelCheckbox input[type="checkbox"]::after{
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--card-bg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.labelCheckbox input[type="checkbox"]:checked::after{
+  opacity: 1;
+}
+
+.labelCheckbox input[type="checkbox"]:focus-visible{
+  outline: 2px solid var(--accent-opaque);
+  outline-offset: 3px;
+}
+
+.mutedSmall{ color: var(--muted); font-size: 12px; }

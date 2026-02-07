@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { MatchInfo } from "@/types/mcsr";
-import { Filters } from "@/lib/stats";
+import { Filters, applyFilters } from "@/lib/stats";
 import { parseVariations, humanizeBiome, humanizeStructure, typeLabel, humanizeVariation, getBastionTypeFromSeed, VARIATION_AUTO_LINKS } from "@/lib/format";
+import styles from './FilterPanel.module.css';
 
 function uniqStrings(values: (string | null | undefined)[]) {
   return Array.from(new Set(values.filter((v): v is string => Boolean(v)))).sort();
@@ -26,6 +27,9 @@ interface FilterPanelProps {
  * focusing on beginner matches only.
  */
 export default function FilterPanel({ matches, value, onChange }: FilterPanelProps) {
+  const [showCount, setShowCount] = useState(false);
+  const [showVariationsInfo, setShowVariationsInfo] = useState(false);
+  const count = 100;
   // Unique lists for each seed dimension
   // Match types (explicit list). Single-select: choose one type or All.
   const TYPE_OPTIONS: number[] = [1, 2, 3, 4];
@@ -61,32 +65,45 @@ export default function FilterPanel({ matches, value, onChange }: FilterPanelPro
 
   const overworlds = useMemo(() => uniqStrings(matches.map((m) => m.seed?.overworld)), [matches]);
   const bastions = useMemo(() => uniqStrings(matches.map((m) => (m as any).bastionType ?? m.seed?.bastion ?? m.seed?.nether)), [matches]);
+  // Build a dependency key representing all non-variation filters so the
+  // variations list recomputes whenever other filters change.
+  const variationsFilterKey = JSON.stringify({
+    types: Array.from(value.types ?? []),
+    startDateSec: value.startDateSec ?? null,
+    endDateSec: value.endDateSec ?? null,
+    overworld: Array.from(value.overworld ?? []),
+    bastion: Array.from(value.bastion ?? []),
+    fortress: Array.from(value.fortress ?? []),
+    bastionBiome: Array.from(value.bastionBiome ?? []),
+    structure: Array.from(value.structure ?? []),
+    bastionType: Array.from(value.bastionType ?? []),
+    // Include currently-selected variations so the variations list
+    // recomputes when the user toggles a variation (narrowing the set).
+    variations: Array.from(value.variations ?? []),
+    hideDecayed: !!value.hideDecayed,
+    hideForfeits: !!value.hideForfeits,
+    beginnerOnly: !!value.beginnerOnly,
+  });
+
   const variations = useMemo(() => {
-    // Always populate variations from all matches (no "build from nothing"
-    // gating). The list still respects blocking rules so unwanted keys are
-    // filtered out.
     const result = new Set<string>();
     const BLOCKED_PREFIXES = ['biome:', 'end_spawn', 'end_tower', 'type:structure'];
     const BLOCKED_EXACT = new Set([
       'chest:structure:carrot',
-      'chest:structure:obsidian',
-      'bastion:triple:2',
-      'bastion:triple:1',
-      'bastion:single:1',
-      'bastion:single:2',
-      'bastion:small_single:1',
-      'bastion:small_single:2',
-      'bastion:triple:3',
+      'chest:structure:golden_carrot',
+      'chest:structure:obsidian'
     ]);
-    for (const m of matches) {
+
+    // Compute variations from the matches that remain after applying
+    // the current filters (including any selected variations). This
+    // means selecting a variation will narrow the list to variations
+    // that co-occur with the selection.
+    const baseMatches = applyFilters(matches, value);
+    for (const m of baseMatches) {
       const seed = m.seed;
-      const parsed = parseVariations(seed?.variations ?? []);
-      const bastionVal = (m as any).bastionType ?? seed?.bastion ?? seed?.nether ?? null;
       for (const v of seed?.variations ?? []) {
         if (!v) continue;
-        // Skip exact-blocked variations
         if (BLOCKED_EXACT.has(v)) continue;
-        // Skip blocked variation types by prefix
         let skip = false;
         for (const p of BLOCKED_PREFIXES) {
           if (v.startsWith(p)) {
@@ -99,7 +116,7 @@ export default function FilterPanel({ matches, value, onChange }: FilterPanelPro
       }
     }
     return uniqStrings(Array.from(result));
-  }, [matches, JSON.stringify(Array.from(value.overworld ?? [])), JSON.stringify(Array.from(value.bastion ?? [])), JSON.stringify(Array.from(value.fortress ?? [])), JSON.stringify(Array.from(value.structure ?? [])), JSON.stringify(Array.from(value.bastionBiome ?? []))]);
+  }, [matches, variationsFilterKey]);
   const fortressBiomes = useMemo(() => uniqStrings(matches.flatMap((m) => Array.from(parseVariations(m.seed?.variations ?? []).fortressBiomes))), [matches]);
   const bastionBiomes = useMemo(() => uniqStrings(matches.flatMap((m) => Array.from(parseVariations(m.seed?.variations ?? []).bastionBiomes))), [matches]);
   const structures = useMemo(() => uniqStrings(matches.flatMap((m) => Array.from(parseVariations(m.seed?.variations ?? []).structures))), [matches]);
@@ -140,24 +157,23 @@ export default function FilterPanel({ matches, value, onChange }: FilterPanelPro
   }
 
   return (
-    <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 16 }}>
-      <div style={{ fontWeight: 600, marginBottom: 12 }}>Filters</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+    <div className={styles.container}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className={styles.header}>Filters</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className={styles.mutedSmall}>Matches (view controls in Stats)</div>
+        </div>
+      </div>
+      {/* Slider moved to StatCards; keep space for future small controls */}
+      <div className={styles.grid}>
         {/* Match Type (single-select) */}
         <div>
-          <div style={{ fontSize: 12, marginBottom: 6, color: '#666' }}>Match Type</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.sectionTitle}>Match Type</div>
+          <div className={styles.btnGroup}>
             <button
               key="all"
               onClick={() => selectType(undefined)}
-              style={{
-                padding: '4px 8px',
-                borderRadius: 6,
-                border: !value.types ? '2px solid #0070f3' : '1px solid #ccc',
-                backgroundColor: !value.types ? '#e6f4ff' : 'white',
-                cursor: 'pointer',
-                fontSize: 12,
-              }}
+              className={`${styles.btn} ${!value.types ? styles.selected : ''}`}
             >
               All
             </button>
@@ -167,14 +183,7 @@ export default function FilterPanel({ matches, value, onChange }: FilterPanelPro
                 <button
                   key={t}
                   onClick={() => selectType(t)}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: 6,
-                    border: selected ? '2px solid #0070f3' : '1px solid #ccc',
-                    backgroundColor: selected ? '#e6f4ff' : 'white',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                  }}
+                  className={`${styles.btn} ${selected ? styles.selected : ''}`}
                 >
                   {typeLabels(t)}
                 </button>
@@ -184,135 +193,105 @@ export default function FilterPanel({ matches, value, onChange }: FilterPanelPro
         </div>
         {/* Overworld */}
         <div>
-          <div style={{ fontSize: 12, marginBottom: 6, color: '#666' }}>Overworld</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.sectionTitle}>Overworld</div>
+          <div className={styles.btnGroup}>
             {overworlds.map((o) => (
-              <button
-                key={o}
-                onClick={() => toggleSet('overworld', o)}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: 6,
-                  border: value.overworld?.has(o) ? '2px solid #0070f3' : '1px solid #ccc',
-                  backgroundColor: value.overworld?.has(o) ? '#e6f4ff' : 'white',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                }}
-              >
+              <button key={o} onClick={() => toggleSet('overworld', o)} className={`${styles.btn} ${value.overworld?.has(o) ? styles.selected : ''}`}>
                 {humanizeStructure(o)}
               </button>
             ))}
-            {overworlds.length === 0 && <span style={{ fontSize: 12 }}>N/A</span>}
+            {overworlds.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
           </div>
         </div>
         {/* Bastion */}
         <div>
-          <div style={{ fontSize: 12, marginBottom: 6, color: '#666' }}>Bastion</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.sectionTitle}>Bastion</div>
+          <div className={styles.btnGroup}>
             {bastions.map((b) => (
-              <button
-                key={b}
-                onClick={() => toggleSet('bastion', b)}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: 6,
-                  border: value.bastion?.has(b) ? '2px solid #0070f3' : '1px solid #ccc',
-                  backgroundColor: value.bastion?.has(b) ? '#e6f4ff' : 'white',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                }}
-              >
+              <button key={b} onClick={() => toggleSet('bastion', b)} className={`${styles.btn} ${value.bastion?.has(b) ? styles.selected : ''}`}>
                 {humanizeStructure(b)}
               </button>
             ))}
-            {bastions.length === 0 && <span style={{ fontSize: 12 }}>N/A</span>}
+            {bastions.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
           </div>
         </div>
         {/* Variations */}
         <div>
-          <div style={{ fontSize: 12, marginBottom: 6, color: '#666' }}>Variations</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 120, overflowY: 'auto' }}>
+          <div className={styles.sectionTitleWrap}>
+            <div className={styles.sectionTitle}>Variations</div>
+            <button
+              aria-label="Variations info"
+              onMouseEnter={() => setShowVariationsInfo(true)}
+              onFocus={() => setShowVariationsInfo(true)}
+              onMouseLeave={() => setShowVariationsInfo(false)}
+              onBlur={() => setShowVariationsInfo(false)}
+              className={styles.infoButton}
+              title="Explain variations"
+            >
+              i
+            </button>
+            {showVariationsInfo && (
+              <div className={styles.infoTooltip} role="status">
+                Variations are details about the seed. 1 Small Single refers to Stables single chest. Singles refer to singles, unless Stables, where they are doubles.
+              </div>
+            )}
+          </div>
+          <div className={`${styles.btnGroup} ${styles.variationsScroll}`}>
             {variations.map((v) => (
-              <button
-                key={v}
-                onClick={() => toggleVariation(v)}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: 6,
-                  border: value.variations?.has(v) ? '2px solid #0070f3' : '1px solid #ccc',
-                  backgroundColor: value.variations?.has(v) ? '#e6f4ff' : 'white',
-                  cursor: 'pointer',
-                  fontSize: 12,
-                }}
-              >
+              <button key={v} onClick={() => toggleVariation(v)} className={`${styles.btn} ${value.variations?.has(v) ? styles.selected : ''}`}>
                 {humanizeVariation(v)}
               </button>
             ))}
-            {variations.length === 0 && <span style={{ fontSize: 12 }}>N/A</span>}
+            {variations.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
           </div>
         </div>
         {/* End tower heights removed */}
       </div>
       {/* Derived variation categories */}
-      <div style={{ height: 12 }} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+      <div className={styles.rowGap} />
+      <div className={styles.grid}>
         <div>
-          <div style={{ fontSize: 12, marginBottom: 6, color: '#666' }}>Fortress biomes</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.sectionTitle}>Fortress biomes</div>
+          <div className={styles.btnGroup}>
             {fortressBiomes.map((b) => (
-              <button key={b} onClick={() => toggleSet('fortress', b)} style={{ padding: '4px 8px', borderRadius: 6, border: value.fortress?.has(b) ? '2px solid #0070f3' : '1px solid #ccc', backgroundColor: value.fortress?.has(b) ? '#e6f4ff' : 'white', cursor: 'pointer', fontSize: 12 }}>{humanizeBiome(b)}</button>
+              <button key={b} onClick={() => toggleSet('fortress', b)} className={`${styles.btn} ${value.fortress?.has(b) ? styles.selected : ''}`}>{humanizeBiome(b)}</button>
             ))}
-            {fortressBiomes.length === 0 && <span style={{ fontSize: 12 }}>N/A</span>}
+            {fortressBiomes.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 12, marginBottom: 6, color: '#666' }}>Bastion biomes</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.sectionTitle}>Bastion biomes</div>
+          <div className={styles.btnGroup}>
             {bastionBiomes.map((b) => (
-              <button key={b} onClick={() => toggleSet('bastionBiome', b)} style={{ padding: '4px 8px', borderRadius: 6, border: value.bastionBiome?.has(b) ? '2px solid #0070f3' : '1px solid #ccc', backgroundColor: value.bastionBiome?.has(b) ? '#e6f4ff' : 'white', cursor: 'pointer', fontSize: 12 }}>{humanizeBiome(b)}</button>
+              <button key={b} onClick={() => toggleSet('bastionBiome', b)} className={`${styles.btn} ${value.bastionBiome?.has(b) ? styles.selected : ''}`}>{humanizeBiome(b)}</button>
             ))}
-            {bastionBiomes.length === 0 && <span style={{ fontSize: 12 }}>N/A</span>}
+            {bastionBiomes.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
           </div>
         </div>
         <div>
-          <div style={{ fontSize: 12, marginBottom: 6, color: '#666' }}>Overworld biomes</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <div className={styles.sectionTitle}>Overworld biomes</div>
+          <div className={styles.btnGroup}>
             {structures.map((s) => (
-              <button key={s} onClick={() => toggleSet('structure', s)} style={{ padding: '4px 8px', borderRadius: 6, border: value.structure?.has(s) ? '2px solid #0070f3' : '1px solid #ccc', backgroundColor: value.structure?.has(s) ? '#e6f4ff' : 'white', cursor: 'pointer', fontSize: 12 }}>{humanizeStructure(s)}</button>
+              <button key={s} onClick={() => toggleSet('structure', s)} className={`${styles.btn} ${value.structure?.has(s) ? styles.selected : ''}`}>{humanizeStructure(s)}</button>
             ))}
-            {structures.length === 0 && <span style={{ fontSize: 12 }}>N/A</span>}
+            {structures.length === 0 && <span className={styles.mutedSmall}>N/A</span>}
           </div>
         </div>
         
         {/* End spawn buried filter removed */}
       </div>
       {/* Additional toggle checkboxes */}
-      <div style={{ marginTop: 12, display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 12 }}>
-          <input
-            type="checkbox"
-            checked={!!value.hideForfeits}
-            onChange={(e) => onChange({ ...value, hideForfeits: e.target.checked })}
-            style={{ marginRight: 4 }}
-          />
+      <div className={styles.checkboxRow}>
+        <label className={styles.labelCheckbox}>
+          <input type="checkbox" checked={!!value.hideForfeits} onChange={(e) => onChange({ ...value, hideForfeits: e.target.checked })} />
           Hide forfeits
         </label>
-        <label style={{ fontSize: 12 }}>
-          <input
-            type="checkbox"
-            checked={!!value.hideDecayed}
-            onChange={(e) => onChange({ ...value, hideDecayed: e.target.checked })}
-            style={{ marginRight: 4 }}
-          />
+        <label className={styles.labelCheckbox}>
+          <input type="checkbox" checked={!!value.hideDecayed} onChange={(e) => onChange({ ...value, hideDecayed: e.target.checked })} />
           Hide decayed
         </label>
-        <label style={{ fontSize: 12 }}>
-          <input
-            type="checkbox"
-            checked={!!value.beginnerOnly}
-            onChange={(e) => onChange({ ...value, beginnerOnly: e.target.checked })}
-            style={{ marginRight: 4 }}
-          />
+        <label className={styles.labelCheckbox}>
+          <input type="checkbox" checked={!!value.beginnerOnly} onChange={(e) => onChange({ ...value, beginnerOnly: e.target.checked })} />
           Beginner only
         </label>
       </div>
